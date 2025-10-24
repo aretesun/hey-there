@@ -1,0 +1,5 @@
+{
+  "name": "AI Travel Planner",
+  "description": "An application that creates a personalized travel plan including weather, currency exchange rates, cultural information, and a detailed itinerary based on the user's desired city and travel dates.",
+  "requestFramePermissions": []
+}

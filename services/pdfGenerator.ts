@@ -136,32 +136,62 @@ export const downloadPlanAsPdf = async (plan: TravelPlan, packingList: PackingLi
 
     // General Info
     builder.addSectionTitle('기본 정보');
-    builder.addKeyValue('예상 날씨', `${plan.weather.averageTemp}, ${plan.weather.description}`);
-    builder.addKeyValue('환율 정보', `${plan.exchangeRate.rate} (${plan.exchangeRate.from} to ${plan.exchangeRate.to})`);
-    builder.addText('문화 팁:');
-    plan.culturalTips.forEach(tip => builder.addText(tip, true));
-    builder.addKeyValue('교통 정보', plan.transportationInfo.description);
-    plan.transportationInfo.options.forEach(opt => builder.addText(opt, true));
-    builder.addKeyValue('현지 물가', `${plan.priceInfo.level}: ${plan.priceInfo.description}`);
-    plan.priceInfo.examples.forEach(ex => builder.addText(ex, true));
+
+    // Weather info
+    if (plan.weather) {
+        builder.addKeyValue('예상 날씨', `${plan.weather.averageTemp}, ${plan.weather.description}`);
+    }
+
+    // Exchange rate info
+    if (plan.exchangeRate) {
+        builder.addKeyValue('환율 정보', `${plan.exchangeRate.rate} (${plan.exchangeRate.from} to ${plan.exchangeRate.to})`);
+    }
+
+    // Cultural tips
+    if (plan.culturalTips && Array.isArray(plan.culturalTips) && plan.culturalTips.length > 0) {
+        builder.addText('문화 팁:');
+        plan.culturalTips.forEach(tip => builder.addText(tip, true));
+    }
+
+    // Transportation info
+    if (plan.transportationInfo) {
+        builder.addKeyValue('교통 정보', plan.transportationInfo.description);
+        if (plan.transportationInfo.options && Array.isArray(plan.transportationInfo.options)) {
+            plan.transportationInfo.options.forEach(opt => builder.addText(opt, true));
+        }
+    }
+
+    // Price info
+    if (plan.priceInfo) {
+        builder.addKeyValue('현지 물가', `${plan.priceInfo.level}: ${plan.priceInfo.description}`);
+        if (plan.priceInfo.examples && Array.isArray(plan.priceInfo.examples)) {
+            plan.priceInfo.examples.forEach(ex => builder.addText(ex, true));
+        }
+    }
 
     // Itinerary
-    builder.addSectionTitle('상세 일정');
-    plan.itinerary.forEach(dayPlan => {
-        builder.addDayTitle(dayPlan.day, dayPlan.title);
-        dayPlan.activities.forEach(activity => {
-            builder.addActivity(activity.time, activity.description);
+    if (plan.itinerary && Array.isArray(plan.itinerary) && plan.itinerary.length > 0) {
+        builder.addSectionTitle('상세 일정');
+        plan.itinerary.forEach(dayPlan => {
+            builder.addDayTitle(dayPlan.day, dayPlan.title);
+            if (dayPlan.activities && Array.isArray(dayPlan.activities)) {
+                dayPlan.activities.forEach(activity => {
+                    builder.addActivity(activity.time, activity.description);
+                });
+            }
         });
-    });
+    }
 
     // Packing List
-    if (packingList) {
+    if (packingList && packingList.packing_list && Array.isArray(packingList.packing_list) && packingList.packing_list.length > 0) {
         builder.addSectionTitle('준비물 리스트');
         packingList.packing_list.forEach(category => {
             builder.addPackingCategory(category.category);
-            category.items.forEach(item => {
-                builder.addPackingItem(item.item, item.note);
-            });
+            if (category.items && Array.isArray(category.items)) {
+                category.items.forEach(item => {
+                    builder.addPackingItem(item.item, item.note);
+                });
+            }
         });
     }
 

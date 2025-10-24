@@ -8,6 +8,7 @@ class PdfBuilder {
     private pageHeight: number;
     private margin: number;
     private contentWidth: number;
+    private fontName: string; // Store the active font name
 
     constructor() {
         this.doc = new jsPDF();
@@ -15,22 +16,20 @@ class PdfBuilder {
         this.y = this.margin;
         this.pageHeight = this.doc.internal.pageSize.getHeight();
         this.contentWidth = this.doc.internal.pageSize.getWidth() - this.margin * 2;
-        this.addFont();
+        this.fontName = this.addFont(); // Initialize font and get the name to use
     }
 
-    private addFont() {
+    private addFont(): string {
         try {
-            // A simple validation to check for the presence and apparent validity of the font data.
             if (!nanumGothicBase64 || nanumGothicBase64.length < 10000 || !nanumGothicBase64.startsWith('AAEAAA')) {
                 throw new Error("Font data is missing or appears to be invalid.");
             }
             this.doc.addFileToVFS('NanumGothic-Regular.ttf', nanumGothicBase64);
             this.doc.addFont('NanumGothic-Regular.ttf', 'NanumGothic', 'normal');
-            this.doc.setFont('NanumGothic');
+            return 'NanumGothic'; // Return font name on success
         } catch (e) {
             console.error("Failed to load custom font for PDF, falling back to default. Korean text may not render correctly.", e);
-            // Fallback to a standard font. This prevents a crash but may not render Korean characters.
-            this.doc.setFont('helvetica');
+            return 'helvetica'; // Return fallback font name
         }
     }
     
@@ -40,8 +39,14 @@ class PdfBuilder {
             this.y = this.margin;
         }
     }
+    
+    // Helper to consistently set the font before writing text
+    private setActiveFont() {
+        this.doc.setFont(this.fontName);
+    }
 
     addTitle(text: string) {
+        this.setActiveFont();
         this.doc.setFontSize(22);
         this.doc.setTextColor(44, 62, 80);
         const splitText = this.doc.splitTextToSize(text, this.contentWidth);
@@ -51,6 +56,7 @@ class PdfBuilder {
     }
 
     addSubtitle(text: string) {
+        this.setActiveFont();
         this.doc.setFontSize(14);
         this.doc.setTextColor(127, 140, 141);
         const splitText = this.doc.splitTextToSize(text, this.contentWidth);
@@ -62,6 +68,7 @@ class PdfBuilder {
     addSectionTitle(text: string) {
         this.y += 5;
         this.checkPageBreak(12);
+        this.setActiveFont();
         this.doc.setFontSize(16);
         this.doc.setTextColor(22, 160, 133);
         this.doc.text(text, this.margin, this.y);
@@ -71,6 +78,7 @@ class PdfBuilder {
     }
     
     addText(text: string | string[], isListItem = false) {
+        this.setActiveFont();
         this.doc.setFontSize(10);
         this.doc.setTextColor(52, 73, 94);
         const indent = isListItem ? this.margin + 4 : this.margin;
@@ -95,6 +103,7 @@ class PdfBuilder {
         this.y += 4;
         const text = `Day ${day}: ${title}`;
         this.checkPageBreak(10);
+        this.setActiveFont();
         this.doc.setFontSize(12);
         this.doc.setTextColor(41, 128, 185);
         this.doc.text(text, this.margin, this.y);
@@ -109,6 +118,7 @@ class PdfBuilder {
     addPackingCategory(category: string) {
         this.y += 4;
         this.checkPageBreak(10);
+        this.setActiveFont();
         this.doc.setFontSize(12);
         this.doc.setTextColor(142, 68, 173);
         this.doc.text(category, this.margin, this.y);
@@ -131,29 +141,23 @@ export const downloadPlanAsPdf = async (plan: TravelPlan, packingList: PackingLi
     const builder = new PdfBuilder();
 
     // Header
-    builder.addTitle(`${plan.city}, ${plan.country} 여행 계획`);
-    builder.addSubtitle(`${plan.startDate} ~ ${plan.endDate}`);
+    builder.addTitle(`${plan.city || ''}, ${plan.country || ''} 여행 계획`);
+    builder.addSubtitle(`${plan.startDate || ''} ~ ${plan.endDate || ''}`);
 
     // General Info
     builder.addSectionTitle('기본 정보');
-
-    // Weather info
     if (plan.weather) {
         builder.addKeyValue('예상 날씨', `${plan.weather.averageTemp}, ${plan.weather.description}`);
     }
-
-    // Exchange rate info
     if (plan.exchangeRate) {
         builder.addKeyValue('환율 정보', `${plan.exchangeRate.rate} (${plan.exchangeRate.from} to ${plan.exchangeRate.to})`);
     }
 
-    // Cultural tips
-    if (plan.culturalTips && Array.isArray(plan.culturalTips) && plan.culturalTips.length > 0) {
+    if (plan.culturalTips && Array.isArray(plan.culturalTips)) {
         builder.addText('문화 팁:');
         plan.culturalTips.forEach(tip => builder.addText(tip, true));
     }
-
-    // Transportation info
+    
     if (plan.transportationInfo) {
         builder.addKeyValue('교통 정보', plan.transportationInfo.description);
         if (plan.transportationInfo.options && Array.isArray(plan.transportationInfo.options)) {
@@ -161,7 +165,6 @@ export const downloadPlanAsPdf = async (plan: TravelPlan, packingList: PackingLi
         }
     }
 
-    // Price info
     if (plan.priceInfo) {
         builder.addKeyValue('현지 물가', `${plan.priceInfo.level}: ${plan.priceInfo.description}`);
         if (plan.priceInfo.examples && Array.isArray(plan.priceInfo.examples)) {
@@ -170,30 +173,38 @@ export const downloadPlanAsPdf = async (plan: TravelPlan, packingList: PackingLi
     }
 
     // Itinerary
-    if (plan.itinerary && Array.isArray(plan.itinerary) && plan.itinerary.length > 0) {
+    if (plan.itinerary && Array.isArray(plan.itinerary)) {
         builder.addSectionTitle('상세 일정');
         plan.itinerary.forEach(dayPlan => {
-            builder.addDayTitle(dayPlan.day, dayPlan.title);
-            if (dayPlan.activities && Array.isArray(dayPlan.activities)) {
-                dayPlan.activities.forEach(activity => {
-                    builder.addActivity(activity.time, activity.description);
-                });
+            if (dayPlan) {
+                builder.addDayTitle(dayPlan.day, dayPlan.title);
+                if (dayPlan.activities && Array.isArray(dayPlan.activities)) {
+                    dayPlan.activities.forEach(activity => {
+                        if (activity) {
+                            builder.addActivity(activity.time, activity.description);
+                        }
+                    });
+                }
             }
         });
     }
 
     // Packing List
-    if (packingList && packingList.packing_list && Array.isArray(packingList.packing_list) && packingList.packing_list.length > 0) {
+    if (packingList && packingList.packing_list && Array.isArray(packingList.packing_list)) {
         builder.addSectionTitle('준비물 리스트');
         packingList.packing_list.forEach(category => {
-            builder.addPackingCategory(category.category);
-            if (category.items && Array.isArray(category.items)) {
-                category.items.forEach(item => {
-                    builder.addPackingItem(item.item, item.note);
-                });
+            if (category) {
+                builder.addPackingCategory(category.category);
+                if (category.items && Array.isArray(category.items)) {
+                    category.items.forEach(item => {
+                        if (item) {
+                            builder.addPackingItem(item.item, item.note);
+                        }
+                    });
+                }
             }
         });
     }
 
-    builder.save(`AI-여행계획-${plan.city}.pdf`);
+    builder.save(`AI-여행계획-${plan.city || 'plan'}.pdf`);
 };

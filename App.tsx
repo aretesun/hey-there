@@ -21,10 +21,6 @@ function App() {
 
   // Use a ref for conversational history sent to the API. This will not contain the large plan JSON.
   const chatHistoryRef = useRef<{ role: 'user' | 'model', parts: { text: string }[] }[]>([]);
-  
-  // Refs for debouncing UI updates during streaming to prevent excessive re-renders.
-  const planBufferRef = useRef<TravelPlan | null>(null);
-  const debounceTimerRef = useRef<number | null>(null);
 
 
   const processStreamedBuffer = (
@@ -71,50 +67,43 @@ function App() {
     setChatMessages([]);
     setIsChatOpen(false);
     chatHistoryRef.current = [];
-    planBufferRef.current = null;
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     
     const chat = startChatSession();
     
     const streamPromise = async () => {
       const stream = await generateInitialTravelPlanStream(chat, city, startDate, endDate, travelStyles, budget);
       let buffer = '';
+      let accumulatedGeneralInfo: Partial<TravelPlan> = {};
+      const accumulatedItinerary = new Map<number, DailyPlan>();
       
       for await (const chunk of stream) {
           buffer += chunk.text;
-
-          let generalInfoUpdate: Partial<TravelPlan> | null = null;
-          const dailyPlanUpdates: DailyPlan[] = [];
+          let wasUpdated = false;
 
           buffer = processStreamedBuffer(buffer, 'general_info', (json) => {
-              try { generalInfoUpdate = JSON.parse(json); } 
+              try {
+                  const parsedInfo = JSON.parse(json);
+                  accumulatedGeneralInfo = { ...accumulatedGeneralInfo, ...parsedInfo };
+                  wasUpdated = true;
+              } 
               catch (e) { console.error("Failed to parse general_info", e, json); }
           });
 
           buffer = processStreamedBuffer(buffer, 'daily_plan', (json) => {
-              try { dailyPlanUpdates.push(JSON.parse(json)); } 
+              try {
+                  const dailyPlan = JSON.parse(json);
+                  accumulatedItinerary.set(dailyPlan.day, dailyPlan);
+                  wasUpdated = true;
+              } 
               catch (e) { console.error("Failed to parse daily_plan", e, json); }
           });
 
-          // Update a buffer ref frequently, but the state only on a debounced timer
-          if (generalInfoUpdate || dailyPlanUpdates.length > 0) {
-              const newPlan = planBufferRef.current ? { ...planBufferRef.current } : { itinerary: [] } as Partial<TravelPlan>;
-              if (generalInfoUpdate) {
-                  Object.assign(newPlan, generalInfoUpdate);
-              }
-              if (dailyPlanUpdates.length > 0) {
-                  if (!Array.isArray(newPlan.itinerary)) newPlan.itinerary = [];
-                  // Combine and sort new and existing activities to handle them correctly
-                  const existingActivities = new Map(newPlan.itinerary.map(p => [p.day, p]));
-                  dailyPlanUpdates.forEach(p => existingActivities.set(p.day, p));
-                  newPlan.itinerary = Array.from(existingActivities.values()).sort((a, b) => a.day - b.day);
-              }
-              planBufferRef.current = newPlan as TravelPlan;
-
-              if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-              debounceTimerRef.current = window.setTimeout(() => {
-                  setTravelPlan(planBufferRef.current);
-              }, 300);
+          if (wasUpdated) {
+              const newPlan: TravelPlan = {
+                  ...accumulatedGeneralInfo,
+                  itinerary: Array.from(accumulatedItinerary.values()).sort((a, b) => a.day - b.day),
+              } as TravelPlan;
+              setTravelPlan(newPlan);
           }
 
           buffer = processStreamedBuffer(buffer, 'confirmation', (json) => {
@@ -123,15 +112,8 @@ function App() {
               setChatMessages([{ role: 'model', text: confirmationMsg }]);
               // Only store the conversational part in history, not the massive plan object.
               chatHistoryRef.current.push({ role: 'model', parts: [{ text: confirmationMsg }] });
-               if(planBufferRef.current) {
-                planBufferRef.current.confirmationMessage = confirmationMsg;
-              }
           });
       }
-
-      // Final update after stream ends
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-      setTravelPlan(planBufferRef.current);
     };
 
     const timeoutPromise = new Promise((_, reject) => 

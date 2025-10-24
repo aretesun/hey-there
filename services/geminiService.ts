@@ -95,20 +95,28 @@ const getStreamingPrompt = (city: string, startDate: string, endDate: string, tr
         ${travelStyleText}
         ${budgetText}
 
-        Generate the response in Korean, piece by piece, using the following structure.
-        First, provide the general information as a single JSON object wrapped in <general_info> tags. This JSON should not contain the itinerary.
-        The general info JSON object must contain: city, country, startDate, endDate, weather, exchangeRate (the 'rate' field must be a string calculated for 1000 KRW, e.g., '1000 KRW = 0.72 USD'), culturalTips, transportationInfo, priceInfo, cityLatitude, and cityLongitude.
+        IMPORTANT: You MUST respond in the following exact format and order, in Korean:
 
-        Then, for each day of the trip, provide a detailed daily plan as a separate JSON object, each wrapped in <daily_plan> tags.
-        Each daily plan JSON must contain: day, title, and a list of activities.
-        For each activity, provide: time, description, icon, and if applicable, latitude, longitude, and booking URLs (klookUrl, bookingUrl, tripAdvisorUrl). You MUST provide latitude and longitude for any specific physical location.
+        1.  First, and most importantly, you MUST output a single, complete JSON object wrapped in <general_info></general_info> tags.
+            This JSON object is for general information and MUST include ALL of the following fields:
+            - city, country, startDate, endDate
+            - weather (an object with averageTemp and description)
+            - exchangeRate (an object with from, to, and a rate string calculated for 1000 KRW, e.g., '1000 KRW = 0.72 USD')
+            - culturalTips (an array of strings)
+            - transportationInfo (an object with description and an options array)
+            - priceInfo (an object with level, description, and an examples array)
+            - cityLatitude, cityLongitude
 
-        Finally, after all daily plans are generated, provide a friendly confirmation message as a JSON object wrapped in <confirmation> tags.
-        The confirmation JSON object must contain one field: 'confirmationMessage'.
+        2.  After the general_info block, provide a detailed daily plan for EACH day of the trip. Each plan must be a separate JSON object, wrapped in its own <daily_plan></daily_plan> tags.
+            Each daily plan JSON must contain: day, title, and a list of activities.
+            For each activity, provide: time, description, icon, and if applicable, latitude, longitude, and booking URLs. You MUST provide latitude and longitude for any specific physical location.
 
-        Example output structure:
+        3.  Finally, after all daily plans are generated, provide a friendly confirmation message as a JSON object wrapped in <confirmation></confirmation> tags.
+            The confirmation JSON object must contain one field: 'confirmationMessage'.
+
+        Example of the required output structure:
         <general_info>
-        { "city": "...", "country": "...", ... }
+        { "city": "Paris", "country": "France", "startDate": "2024-10-26", "endDate": "2024-10-28", "weather": {"averageTemp":"15°C","description":"Mild and partly cloudy"}, "exchangeRate": {"from":"KRW","to":"EUR","rate":"1000 KRW = 0.68 EUR"}, "culturalTips": ["..."], "transportationInfo": {"description":"...","options":["..."]}, "priceInfo": {"level":"Moderate","description":"...","examples":["..."]}, "cityLatitude": 48.8566, "cityLongitude": 2.3522 }
         </end_info>
         <daily_plan>
         { "day": 1, "title": "...", "activities": [ ... ] }

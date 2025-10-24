@@ -200,35 +200,43 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ plan, isLoading }) => {
                     )}
                 </div>
 
-                { plan.weather && (
-                    <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+                <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+                    {plan.weather && (
                         <InfoCard title="예상 날씨" icon="🌦️">
                             <p>{plan.weather.averageTemp}</p>
                             <p>{plan.weather.description}</p>
                         </InfoCard>
+                    )}
+                    {plan.exchangeRate && (
                         <InfoCard title="환율 정보" icon="💹">
                             <p>{plan.exchangeRate?.rate}</p>
                             <p className="text-sm">({plan.exchangeRate?.from} to {plan.exchangeRate?.to})</p>
                         </InfoCard>
+                    )}
+                    {plan.culturalTips && (
                         <InfoCard title="문화 팁" icon="💡">
                             <ul className="list-none text-left space-y-1">
                                 {(Array.isArray(plan.culturalTips) ? plan.culturalTips : []).slice(0, 3).map((tip, index) => <li key={index}>- {tip}</li>)}
                             </ul>
                         </InfoCard>
+                    )}
+                    {plan.transportationInfo && (
                         <InfoCard title="교통 정보" icon={<TransportPriceIcon className="w-8 h-8"/>}>
                             <p className="font-semibold">{plan.transportationInfo?.description}</p>
                             <ul className="list-none mt-2 space-y-1">
                                 {(Array.isArray(plan.transportationInfo?.options) ? plan.transportationInfo.options : []).map((opt, index) => <li key={index}>- {opt}</li>)}
                             </ul>
                         </InfoCard>
+                    )}
+                    {plan.priceInfo && (
                         <InfoCard title="현지 물가" icon={<PriceIcon className="w-8 h-8"/>}>
                             <p className="font-semibold">{plan.priceInfo?.level}: {plan.priceInfo?.description}</p>
                             <ul className="list-none mt-2 space-y-1">
                                 {(Array.isArray(plan.priceInfo?.examples) ? plan.priceInfo.examples : []).map((ex, index) => <li key={index}>- {ex}</li>)}
                             </ul>
                         </InfoCard>
-                    </section>
-                )}
+                    )}
+                </section>
                 
                 {currentMapUrl && (
                     <section ref={mapSectionRef} className="mb-10 scroll-mt-8">

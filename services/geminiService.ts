@@ -11,6 +11,39 @@ const travelPlanSchema = {
         country: { type: Type.STRING, description: "The country name." },
         startDate: { type: Type.STRING, description: "The start date of the trip." },
         endDate: { type: Type.STRING, description: "The end date of the trip." },
+        constraints: {
+            type: Type.OBJECT,
+            description: "Travel constraints like flight and accommodation details.",
+            properties: {
+                arrivalFlight: {
+                    type: Type.OBJECT,
+                    properties: {
+                        airport: { type: Type.STRING },
+                        arrivalTime: { type: Type.STRING, description: "ISO 8601 format, e.g., '2025-10-24T11:30'" },
+                        flightNumber: { type: Type.STRING },
+                    },
+                },
+                departureFlight: {
+                    type: Type.OBJECT,
+                    properties: {
+                        airport: { type: Type.STRING },
+                        departureTime: { type: Type.STRING, description: "ISO 8601 format, e.g., '2025-10-26T15:00'" },
+                        flightNumber: { type: Type.STRING },
+                    },
+                },
+                accommodation: {
+                    type: Type.OBJECT,
+                    properties: {
+                        name: { type: Type.STRING },
+                        address: { type: Type.STRING },
+                        latitude: { type: Type.NUMBER },
+                        longitude: { type: Type.NUMBER },
+                        checkInDate: { type: Type.STRING },
+                        checkOutDate: { type: Type.STRING },
+                    },
+                },
+            },
+        },
         weather: {
             type: Type.OBJECT,
             properties: {
@@ -67,6 +100,17 @@ const travelPlanSchema = {
                                 icon: { type: Type.STRING, description: "An emoji or a keyword like 'restaurant', 'museum', 'park', 'cafe', 'shopping', 'transport', 'hotel'" },
                                 latitude: { type: Type.NUMBER, description: "The latitude coordinate for the activity's location, if it's a specific place." },
                                 longitude: { type: Type.NUMBER, description: "The longitude coordinate for the activity's location, if it's a specific place." },
+                                transportFromPrevious: {
+                                    type: Type.OBJECT,
+                                    description: "Details on how to get to this activity from the previous one.",
+                                    properties: {
+                                        method: { type: Type.STRING, description: "e.g., '지하철', '버스', '택시', '도보'" },
+                                        duration: { type: Type.STRING, description: "e.g., '15분'" },
+                                        cost: { type: Type.STRING, description: "e.g., '300 JPY'" },
+                                        route: { type: Type.STRING, description: "e.g., '미도스지선 타고 3정거장'" }
+                                    },
+                                    required: ["method", "duration"]
+                                },
                                 klookUrl: { type: Type.STRING, description: "A Klook.com search URL for booking this activity or ticket, if applicable." },
                                 bookingUrl: { type: Type.STRING, description: "A Booking.com search URL for this accommodation, if the activity is a hotel." },
                                 tripAdvisorUrl: { type: Type.STRING, description: "A TripAdvisor.com search URL for this restaurant or cafe, if applicable." },
@@ -90,10 +134,17 @@ const getStreamingPrompt = (city: string, startDate: string, endDate: string, tr
     const budgetText = budget ? `My budget is '${budget}'.` : '';
 
     return `
-        Create a detailed travel plan for a trip to ${city}.
+        Create a detailed, route-optimized travel plan for a trip to ${city}.
         The trip is from ${startDate} to ${endDate}.
         ${travelStyleText}
         ${budgetText}
+
+        ## IMPORTANT: Route Optimization Requirements
+        1.  **Geographic Clustering**: Group activities by area to minimize backtracking. Example: Visit all Shibuya attractions on the same day.
+        2.  **Time-Based Routing**: Consider realistic travel times (e.g., Subway: 20-40 min between major areas, Walking: 15 min per km). Include wait times and transfers.
+        3.  **Transportation Details**: For EACH activity, include a 'transportFromPrevious' object with 'method', 'duration', 'cost', and 'route'.
+        4.  **Logical Flow**: Start each day from a central accommodation area and end near dining/nightlife. Avoid crossing the city multiple times per day.
+        5.  **Buffer Times**: Include 15-30 min between activities for unexpected delays, breaks, etc.
 
         IMPORTANT: You MUST respond in the following exact format and order, in Korean:
 
@@ -109,7 +160,7 @@ const getStreamingPrompt = (city: string, startDate: string, endDate: string, tr
 
         2.  After the general_info block, provide a detailed daily plan for EACH day of the trip. Each plan must be a separate JSON object, wrapped in its own <daily_plan></daily_plan> tags.
             Each daily plan JSON must contain: day, title, and a list of activities.
-            For each activity, provide: time, description, icon, and if applicable, latitude, longitude, and booking URLs. You MUST provide latitude and longitude for any specific physical location.
+            For each activity, provide: time, description, icon, and if applicable, latitude, longitude, and booking URLs. You MUST provide latitude and longitude for any specific physical location. And critically, include the 'transportFromPrevious' object for every activity after the first one of each day.
 
         3.  Finally, after all daily plans are generated, provide a friendly confirmation message as a JSON object wrapped in <confirmation></confirmation> tags.
             The confirmation JSON object must contain one field: 'confirmationMessage'.
@@ -119,7 +170,7 @@ const getStreamingPrompt = (city: string, startDate: string, endDate: string, tr
         { "city": "Paris", "country": "France", "startDate": "2024-10-26", "endDate": "2024-10-28", "weather": {"averageTemp":"15°C","description":"Mild and partly cloudy"}, "exchangeRate": {"from":"KRW","to":"EUR","rate":"1000 KRW = 0.68 EUR"}, "culturalTips": ["..."], "transportationInfo": {"description":"...","options":["..."]}, "priceInfo": {"level":"Moderate","description":"...","examples":["..."]}, "cityLatitude": 48.8566, "cityLongitude": 2.3522 }
         </end_info>
         <daily_plan>
-        { "day": 1, "title": "...", "activities": [ ... ] }
+        { "day": 1, "title": "...", "activities": [ { "time": "09:00", "description": "...", "transportFromPrevious": null }, { "time": "11:00", "description": "...", "transportFromPrevious": { "method": "지하철", "duration": "20분" } } ] }
         </daily_plan>
         <daily_plan>
         { "day": 2, "title": "...", "activities": [ ... ] }
@@ -157,10 +208,55 @@ export const updateTravelPlan = async (
     chatHistory: { role: 'user' | 'model', parts: { text: string }[] }[],
     updateRequest: string
 ): Promise<TravelPlan> => {
-    const systemInstruction = `You are a travel plan assistant. Your ONLY job is to modify a travel plan based on user requests.
-1.  For every valid modification request, you MUST respond with ONLY the complete, updated travel plan in the same JSON format as the original. You must also update the 'confirmationMessage' field with a user-friendly message in Korean that confirms the specific change you made.
-2.  If the user's request is NOT related to modifying the travel plan (e.g., asking about history, politics, or random facts), you MUST respond with the original, unmodified travel plan JSON and set the 'confirmationMessage' field to '주제와 관련있는 질문만 해주세요.'.
-3.  Do not add any other text, explanations, or markdown formatting. The entire response must be a single, valid JSON object that adheres to the provided schema.`;
+    const systemInstruction = `You are an expert travel planner specializing in route optimization and time management.
+
+## Your Primary Responsibilities:
+
+1.  **Flight & Accommodation Integration:**
+    - When users provide flight information (arrival/departure times), automatically adjust the itinerary:
+        * Add airport transfer time (usually 60-90 minutes).
+        * First day activities must start AFTER arrival + transfer + hotel check-in.
+        * Last day activities must end at least 2-3 hours before departure flight.
+    - When users provide hotel/accommodation information:
+        * Use the hotel location as the daily starting/ending point.
+        * Optimize daily routes to minimize backtracking.
+        * Group nearby attractions together.
+        * Suggest the most efficient public transportation routes.
+
+2.  **Route Optimization:**
+    - Calculate geographic distances between activities.
+    - Minimize total travel time by clustering nearby locations.
+    - Avoid inefficient routes (e.g., A → C → B when B is between A and C).
+    - Consider "one-way loop" itineraries instead of back-and-forth travel.
+
+3.  **Transportation Details:**
+    - For EVERY activity transition, include the 'transportFromPrevious' object with:
+        * Transportation method (subway, bus, taxi, walking).
+        * Estimated travel time.
+        * Approximate cost.
+        * Specific route if applicable (e.g., "Take Midosuji Line 3 stops").
+
+4.  **Time Management:**
+    - Account for realistic activity durations.
+    - Include buffer time between activities (15-30 min).
+    - Consider meal times and rest breaks.
+    - Adjust for rush hour traffic in major cities.
+
+5.  **Context Awareness:**
+    - When user says "my hotel is near Namba", recenter all routes around Namba.
+    - When user provides flight times, validate that the itinerary is feasible.
+    - If user mentions mobility constraints, suggest shorter walking routes.
+
+## Response Format:
+
+You MUST respond with ONLY a complete, updated travel plan in JSON format.
+
+- Update the 'confirmationMessage' with specific details:
+  ✅ GOOD: "비행기 도착 시간(11:30)을 고려하여 첫날 일정을 오후 2시부터 시작하도록 조정했습니다. 난바 호텔을 중심으로 동선을 최적화했습니다."
+  ❌ BAD: "계획이 업데이트되었습니다."
+- Include 'transportFromPrevious' for each activity with realistic travel times.
+- If the user's request is NOT travel-related, respond with the original plan and set 'confirmationMessage' to '주제와 관련있는 질문만 해주세요.'.
+`;
     
     // Create a new chat session specifically for the update with the strict schema.
     const updateChat = ai.chats.create({

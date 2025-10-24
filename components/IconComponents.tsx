@@ -110,30 +110,45 @@ export const CloseIcon: React.FC<IconProps> = ({ className }) => (
 
 
 export const ActivityIcon: React.FC<{ icon: string; className?: string }> = ({ icon, className = 'w-6 h-6' }) => {
-  const iconKey = icon.toLowerCase();
-  if (iconKey.includes('식사') || iconKey.includes('restaurant') || iconKey.includes('food') || iconKey.includes('dinner') || iconKey.includes('lunch') || iconKey.includes('breakfast')) {
-    return <RestaurantIcon className={className} />;
-  }
-  if (iconKey.includes('박물관') || iconKey.includes('museum') || iconKey.includes('art') || iconKey.includes('gallery')) {
-    return <MuseumIcon className={className} />;
-  }
-  if (iconKey.includes('공원') || iconKey.includes('park') || iconKey.includes('garden') || iconKey.includes('nature')) {
-    return <ParkIcon className={className} />;
-  }
-  if (iconKey.includes('카페') || iconKey.includes('cafe') || iconKey.includes('coffee') || iconKey.includes('tea')) {
-    return <CafeIcon className={className} />;
-  }
-  if (iconKey.includes('쇼핑') || iconKey.includes('shopping') || iconKey.includes('market')) {
-    return <ShoppingIcon className={className} />;
-  }
-  if (iconKey.includes('교통') || iconKey.includes('transport') || iconKey.includes('bus') || iconKey.includes('train') || iconKey.includes('subway')) {
-    return <TransportIcon className={className} />;
-  }
-  if (iconKey.includes('숙소') || iconKey.includes('hotel') || iconKey.includes('accommodation')) {
-    return <HotelIcon className={className} />;
-  }
-  if (/\p{Emoji}/u.test(icon)) {
-      return <span className="text-2xl">{icon}</span>
-  }
-  return <DefaultIcon className={className} />;
+    // Defensive programming: if icon is invalid, use default icon
+    if (!icon || typeof icon !== 'string' || icon.trim() === '') {
+      console.warn('⚠️ ActivityIcon: icon prop is missing or invalid');
+      return <DefaultIcon className={className} />;
+    }
+
+    try {
+      const iconKey = icon.toLowerCase();
+
+      if (iconKey.includes('식사') || iconKey.includes('restaurant') || iconKey.includes('food') || iconKey.includes('dinner') || iconKey.includes('lunch') || iconKey.includes('breakfast')) {
+        return <RestaurantIcon className={className} />;
+      }
+      if (iconKey.includes('박물관') || iconKey.includes('museum') || iconKey.includes('art') || iconKey.includes('gallery')) {
+        return <MuseumIcon className={className} />;
+      }
+      if (iconKey.includes('공원') || iconKey.includes('park') || iconKey.includes('garden') || iconKey.includes('nature')) {
+        return <ParkIcon className={className} />;
+      }
+      if (iconKey.includes('카페') || iconKey.includes('cafe') || iconKey.includes('coffee') || iconKey.includes('tea')) {
+        return <CafeIcon className={className} />;
+      }
+      if (iconKey.includes('쇼핑') || iconKey.includes('shopping') || iconKey.includes('market')) {
+        return <ShoppingIcon className={className} />;
+      }
+      if (iconKey.includes('교통') || iconKey.includes('transport') || iconKey.includes('bus') || iconKey.includes('train') || iconKey.includes('subway')) {
+        return <TransportIcon className={className} />;
+      }
+      if (iconKey.includes('숙소') || iconKey.includes('hotel') || iconKey.includes('accommodation')) {
+        return <HotelIcon className={className} />;
+      }
+
+      // Check for emoji
+      if (/\p{Emoji}/u.test(icon)) {
+        return <span className="text-2xl">{icon}</span>;
+      }
+    } catch (e) {
+      console.error('❌ ActivityIcon error:', e);
+      return <DefaultIcon className={className} />;
+    }
+
+    return <DefaultIcon className={className} />;
 };

@@ -1,6 +1,5 @@
 import jsPDF from 'jspdf';
 import { TravelPlan, PackingList } from '../types';
-import { nanumGothicBase64 } from '../assets/NanumGothicFont';
 
 class PdfBuilder {
     private doc: jsPDF;
@@ -8,7 +7,7 @@ class PdfBuilder {
     private pageHeight: number;
     private margin: number;
     private contentWidth: number;
-    private fontName: string; // Store the active font name
+    private fontLoaded: boolean = false;
 
     constructor() {
         this.doc = new jsPDF();
@@ -16,20 +15,57 @@ class PdfBuilder {
         this.y = this.margin;
         this.pageHeight = this.doc.internal.pageSize.getHeight();
         this.contentWidth = this.doc.internal.pageSize.getWidth() - this.margin * 2;
-        this.fontName = this.addFont(); // Initialize font and get the name to use
     }
 
-    private addFont(): string {
+    async addFont() {
         try {
-            if (!nanumGothicBase64 || nanumGothicBase64.length < 10000 || !nanumGothicBase64.startsWith('AAEAAA')) {
-                throw new Error("Font data is missing or appears to be invalid.");
+            const fontUrls = [
+                'https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/NanumGothic.woff',
+                'https://fonts.gstatic.com/ea/nanumgothic/v5/NanumGothic-Regular.ttf',
+                'https://cdn.jsdelivr.net/npm/nanumfont@1.0.0/fonts/NanumGothic.ttf'
+            ];
+            let fontData = null;
+            let lastError: any = null;
+
+            for (const url of fontUrls) {
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    const arrayBuffer = await response.arrayBuffer();
+                    
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    let binary = '';
+                    for (let i = 0; i < uint8Array.length; i++) {
+                        binary += String.fromCharCode(uint8Array[i]);
+                    }
+                    fontData = btoa(binary);
+                    break;
+                } catch (err) {
+                    console.warn(`Failed to load font from ${url}:`, err);
+                    lastError = err;
+                }
             }
-            this.doc.addFileToVFS('NanumGothic-Regular.ttf', nanumGothicBase64);
+
+            if (!fontData) {
+                throw new Error(`Failed to load font from all sources: ${lastError?.message || 'Unknown fetch error'}`);
+            }
+
+            this.doc.addFileToVFS('NanumGothic-Regular.ttf', fontData);
             this.doc.addFont('NanumGothic-Regular.ttf', 'NanumGothic', 'normal');
-            return 'NanumGothic'; // Return font name on success
-        } catch (e) {
-            console.error("Failed to load custom font for PDF, falling back to default. Korean text may not render correctly.", e);
-            return 'helvetica'; // Return fallback font name
+            this.fontLoaded = true;
+        } catch (e: any) {
+            console.error("Critical font loading failure:", e);
+            this.fontLoaded = false;
+            throw new Error(`PDF 폰트 로딩에 실패했습니다: ${e.message}`);
+        }
+    }
+
+    private setFont() {
+        if(this.fontLoaded) {
+            this.doc.setFont('NanumGothic');
+        } else {
+            // Fallback to default if font loading failed
+            this.doc.setFont('helvetica');
         }
     }
     
@@ -37,16 +73,12 @@ class PdfBuilder {
         if (this.y + heightNeeded > this.pageHeight - this.margin) {
             this.doc.addPage();
             this.y = this.margin;
+            this.setFont();
         }
-    }
-    
-    // Helper to consistently set the font before writing text
-    private setActiveFont() {
-        this.doc.setFont(this.fontName);
     }
 
     addTitle(text: string) {
-        this.setActiveFont();
+        this.setFont();
         this.doc.setFontSize(22);
         this.doc.setTextColor(44, 62, 80);
         const splitText = this.doc.splitTextToSize(text, this.contentWidth);
@@ -56,7 +88,7 @@ class PdfBuilder {
     }
 
     addSubtitle(text: string) {
-        this.setActiveFont();
+        this.setFont();
         this.doc.setFontSize(14);
         this.doc.setTextColor(127, 140, 141);
         const splitText = this.doc.splitTextToSize(text, this.contentWidth);
@@ -68,7 +100,7 @@ class PdfBuilder {
     addSectionTitle(text: string) {
         this.y += 5;
         this.checkPageBreak(12);
-        this.setActiveFont();
+        this.setFont();
         this.doc.setFontSize(16);
         this.doc.setTextColor(22, 160, 133);
         this.doc.text(text, this.margin, this.y);
@@ -78,7 +110,7 @@ class PdfBuilder {
     }
     
     addText(text: string | string[], isListItem = false) {
-        this.setActiveFont();
+        this.setFont();
         this.doc.setFontSize(10);
         this.doc.setTextColor(52, 73, 94);
         const indent = isListItem ? this.margin + 4 : this.margin;
@@ -103,7 +135,7 @@ class PdfBuilder {
         this.y += 4;
         const text = `Day ${day}: ${title}`;
         this.checkPageBreak(10);
-        this.setActiveFont();
+        this.setFont();
         this.doc.setFontSize(12);
         this.doc.setTextColor(41, 128, 185);
         this.doc.text(text, this.margin, this.y);
@@ -118,7 +150,7 @@ class PdfBuilder {
     addPackingCategory(category: string) {
         this.y += 4;
         this.checkPageBreak(10);
-        this.setActiveFont();
+        this.setFont();
         this.doc.setFontSize(12);
         this.doc.setTextColor(142, 68, 173);
         this.doc.text(category, this.margin, this.y);
@@ -136,9 +168,8 @@ class PdfBuilder {
 }
 
 export const downloadPlanAsPdf = async (plan: TravelPlan, packingList: PackingList | null): Promise<void> => {
-    // The constructor for PdfBuilder now handles font loading robustly.
-    // Errors during PDF generation will be caught by the handler in ResultsDisplay.tsx.
     const builder = new PdfBuilder();
+    await builder.addFont();
 
     // Header
     builder.addTitle(`${plan.city || ''}, ${plan.country || ''} 여행 계획`);

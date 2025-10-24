@@ -1,9 +1,10 @@
 // Fix: Create ResultsDisplay.tsx to render the generated travel plan.
 import React, { useState, useRef, useEffect } from 'react';
 import { TravelPlan, DailyPlan, PackingList, Activity } from '../types';
-import { ActivityIcon, PackingIcon, MapPinIcon, ExternalLinkIcon, PdfDownloadIcon, TransportPriceIcon, PriceIcon } from './IconComponents';
+import { ActivityIcon, PackingIcon, MapPinIcon, ExternalLinkIcon, PdfDownloadIcon, TransportPriceIcon, PriceIcon, TransportIcon } from './IconComponents';
 import { generatePackingList } from '../services/geminiService';
 import { downloadPlanAsPdf } from '../services/pdfGenerator';
+import SearchLinks from './SearchLinks';
 
 
 interface ResultsDisplayProps {
@@ -30,6 +31,25 @@ const DailyPlanCard: React.FC<{ dayPlan: DailyPlan; onActivityClick: (activity: 
                 const hasCoordinates = activity.latitude && activity.longitude;
                 return (
                     <li key={index} className="p-4 flex flex-col transition-colors hover:bg-slate-50">
+                         {activity.transportFromPrevious && (
+                            <div className="pl-10 pb-3 mb-3 border-b border-dashed border-slate-200 flex items-center text-xs text-slate-500 gap-3 flex-wrap">
+                                <div className="flex items-center gap-1 font-semibold">
+                                    <TransportIcon className="w-4 h-4 text-slate-400" />
+                                    <span>{activity.transportFromPrevious.method}</span>
+                                    <span className="text-indigo-600">({activity.transportFromPrevious.duration})</span>
+                                </div>
+                                {activity.transportFromPrevious.cost && (
+                                     <div className="flex items-center gap-1">
+                                        <span>비용: {activity.transportFromPrevious.cost}</span>
+                                     </div>
+                                )}
+                                 {activity.transportFromPrevious.route && (
+                                     <div className="flex items-center gap-1">
+                                        <span>경로: {activity.transportFromPrevious.route}</span>
+                                     </div>
+                                )}
+                            </div>
+                        )}
                         <div
                             className={`flex items-start space-x-4 ${hasCoordinates ? 'cursor-pointer' : ''}`}
                             onClick={() => hasCoordinates && onActivityClick(activity)}
@@ -238,6 +258,10 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ plan, isLoading }) => {
                     )}
                 </section>
                 
+                <section className="mb-10">
+                    <SearchLinks city={plan.city} />
+                </section>
+
                 {currentMapUrl && (
                     <section ref={mapSectionRef} className="mb-10 scroll-mt-8">
                          <h3 className="text-2xl font-bold text-slate-800 mb-6 text-center">도시 지도</h3>

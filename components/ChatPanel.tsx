@@ -46,6 +46,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, isLoading, onSendMessag
                 </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="p-4 bg-blue-50 border-l-4 border-blue-400 mb-4 rounded-r-lg">
+                    <p className="text-sm text-blue-800 font-semibold">💡 여행 계획 수정 팁</p>
+                    <ul className="text-xs text-blue-700 mt-2 space-y-1 list-disc list-inside">
+                        <li>"인천 출발 오전 9시, 오사카 도착 11시 30분"</li>
+                        <li>"호텔은 신주쿠역 근처야"</li>
+                        <li>"둘째 날 오전에 디즈니랜드 가고 싶어"</li>
+                        <li>"걷는 시간을 최소화해줘"</li>
+                    </ul>
+                </div>
+
                 {messages.map((msg, index) => (
                     <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-xs md:max-w-sm lg:max-w-md rounded-2xl px-4 py-2 ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-800'}`}>
